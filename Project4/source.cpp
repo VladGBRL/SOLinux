@@ -86,6 +86,7 @@ void createProcesses() {
                 close(pipes[i][0]); // Close read end of child pipe
                 int start = i * RANGE;
                 int end = (i + 1) * RANGE;
+                if (end > 10000) end = 10000; // Ensure we don't go out of bounds
                 findPrimesInRange(start, end, pipes[i][1]);
             }
         }
