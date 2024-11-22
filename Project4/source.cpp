@@ -20,25 +20,22 @@ bool isPrime(int num) {
 // Proces copil: calculează numerele prime și le scrie într-un pipe
 void findPrimesInRange(int start, int end, int writePipe) {
     std::ostringstream resultStream;
-    resultStream << "[Process " << getpid() << "] Primes in range ["
-        << start << ", " << end << "]: ";
     for (int i = start; i < end; ++i) {
         if (isPrime(i)) {
             resultStream << i << " ";
         }
     }
     std::string result = resultStream.str();
-    std::cout << result << "\n"; // Afișează ce a calculat procesul
-    write(writePipe, result.c_str(), result.size());
+    write(writePipe, result.c_str(), result.size()); // Scrie rezultatele în pipe
     close(writePipe); // Închide pipe-ul după scriere
-    _exit(0);
+    _exit(0); // Termină procesul copil
 }
 
-// Proces 1: colectează rezultatele și le trimite părintelui
+// Proces 1: colectează rezultatele de la celelalte procese și le afișează
 void processOne(int pipes[NUM_PROCESSES][2], int writeToParent) {
     std::ostringstream aggregatedResults;
-    std::cout << "[Process 1] Collecting results...\n";
 
+    // Proces 1 colectează datele din pipe-urile celorlalte procese
     for (int i = 1; i < NUM_PROCESSES; ++i) {
         close(pipes[i][1]); // Închide capătul de scriere al pipe-ului
         char buffer[1024];
@@ -50,12 +47,14 @@ void processOne(int pipes[NUM_PROCESSES][2], int writeToParent) {
         close(pipes[i][0]); // Închide capătul de citire după ce ai terminat
     }
 
+    // Trimite rezultatele agregate către procesul părinte
     std::string finalOutput = aggregatedResults.str();
-    std::cout << "[Process 1] Final primes collected:\n" << finalOutput << "\n";
-
     write(writeToParent, finalOutput.c_str(), finalOutput.size());
     close(writeToParent); // Închide pipe-ul către părinte
-    _exit(0);
+
+    // Afișează numerele prime colectate
+    std::cout << "[Process 1] Final primes collected:\n" << finalOutput << "\n";
+    _exit(0); // Termină procesul 1
 }
 
 // Crează procesele și pipe-urile
