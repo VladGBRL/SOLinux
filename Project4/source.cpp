@@ -1,76 +1,76 @@
-#include <iostream>
+﻿#include <iostream>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <fcntl.h>
-#include <cstring>
-#include <string>
+#include <vector>
+#include <sstream>
 
 #define NUM_PROCESSES 10
+#define RANGE 1000
 
-void CreatePipesAndProcesses() {
-    int hPipes[NUM_PROCESSES][2];
-    pid_t pid[NUM_PROCESSES];
-    char commandLine[256];
-    std::string finalOutput = "";
+bool isPrime(int num) {
+    if (num < 2) return false;
+    for (int i = 2; i * i <= num; ++i) {
+        if (num % i == 0) return false;
+    }
+    return true;
+}
 
-    for (int i = 0; i < NUM_PROCESSES; i++) {
-       
-        if (pipe(hPipes[i]) == -1) {
-            std::cerr << "Error creating pipe " << i + 1 << " (Error code: " << strerror(errno) << ").\n";
-            return;
+void findPrimesInRange(int start, int end, int writePipe) {
+    std::ostringstream resultStream;
+    for (int i = start; i < end; ++i) {
+        if (isPrime(i)) {
+            resultStream << i << " ";
+        }
+    }
+    std::string result = resultStream.str();
+    write(writePipe, result.c_str(), result.size());
+    close(writePipe);
+    _exit(0); // Asigurăm terminarea procesului copil
+}
+
+void createProcesses() {
+    int pipes[NUM_PROCESSES][2];
+    pid_t pids[NUM_PROCESSES];
+
+    for (int i = 0; i < NUM_PROCESSES; ++i) {
+        if (pipe(pipes[i]) == -1) {
+            std::cerr << "Error creating pipe " << i << "\n";
+            exit(1);
         }
 
-        pid[i] = fork();
-        if (pid[i] == -1) {
-            std::cerr << "Error creating process " << i + 1 << " (Error code: " << strerror(errno) << ").\n";
-            return;
+        pids[i] = fork();
+        if (pids[i] == -1) {
+            std::cerr << "Error creating process " << i << "\n";
+            exit(1);
         }
 
-        if (pid[i] == 0) {  // Child process
-            // Close the write end of the pipe in the child process
-            close(hPipes[i][0]);
-
-            // Prepare the command line for prime_checker
-            snprintf(commandLine, sizeof(commandLine), "prime_checker %d %d", i * 1000, (i + 1) * 1000);
-
-            // Execute the command
-            execlp(commandLine, commandLine, NULL);
-            // If execlp fails
-            std::cerr << "Error executing command " << commandLine << " (Error code: " << strerror(errno) << ").\n";
-            return;
+        if (pids[i] == 0) { // Proces copil
+            close(pipes[i][0]); // Închidem capătul de citire
+            int start = i * RANGE;
+            int end = (i + 1) * RANGE;
+            findPrimesInRange(start, end, pipes[i][1]);
         }
-        else {  // Parent process
-            // Close the read end of the pipe in the parent process
-            close(hPipes[i][1]);
-
-            // Read output from the pipe
-            char buffer[1024];
-            ssize_t bytesRead;
-            std::cout << "Reading from pipe " << i + 1 << "...\n";
-            while ((bytesRead = read(hPipes[i][0], buffer, sizeof(buffer) - 1)) > 0) {
-                buffer[bytesRead] = '\0';  // Null-terminate the string
-                finalOutput += buffer;
-                std::cout << "Output from process " << i + 1 << ": " << buffer << "\n";
-            }
-
-            if (bytesRead == -1) {
-                std::cerr << "Error reading from pipe " << i + 1 << " (Error code: " << strerror(errno) << ").\n";
-                return;
-            }
-
-            // Close the read end in the parent
-            close(hPipes[i][0]);
+        else { // Proces părinte
+            close(pipes[i][1]); // Închidem capătul de scriere
         }
     }
 
-    for (int i = 0; i < NUM_PROCESSES; i++) {
-        waitpid(pid[i], NULL, 0);
+    // Proces părinte colectează rezultatele
+    for (int i = 0; i < NUM_PROCESSES; ++i) {
+        waitpid(pids[i], nullptr, 0); // Așteaptă procesul copil să termine
+        char buffer[1024];
+        ssize_t bytesRead;
+        std::cout << "Primes from process " << i + 1 << ": ";
+        while ((bytesRead = read(pipes[i][0], buffer, sizeof(buffer) - 1)) > 0) {
+            buffer[bytesRead] = '\0';
+            std::cout << buffer;
+        }
+        std::cout << "\n";
+        close(pipes[i][0]);
     }
-
-    std::cout << "\nFinal output after all processes completed:\n" << finalOutput << "\n";
 }
 
 int main() {
-    CreatePipesAndProcesses();
+    createProcesses();
     return 0;
 }
