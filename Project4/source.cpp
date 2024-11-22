@@ -20,9 +20,8 @@ bool isPrime(int num) {
 // Proces copil: calculează numerele prime și le scrie într-un pipe
 void findPrimesInRange(int start, int end, int writePipe) {
     std::ostringstream resultStream;
-    resultStream << "[Process " << getpid() << "] Primes in range ["
-        << start << ", " << end << "]: ";
-    for (int i = start; i < end; ++i) {
+    resultStream << "[Process " << getpid() << "] Primes in range [" << start << ", " << end << "]: ";
+    for (int i = start; i <= end; ++i) { // Modificat pentru a include capătul final
         if (isPrime(i)) {
             resultStream << i << " ";
         }
@@ -89,7 +88,7 @@ void createProcesses() {
             else { // Alte procese
                 close(pipes[i][0]); // Închide capătul de citire
                 int start = (i - 1) * RANGE;
-                int end = i * RANGE;
+                int end = (i == NUM_PROCESSES - 1) ? 10000 : i * RANGE - 1; // Ajustare pentru ultimul interval
                 findPrimesInRange(start, end, pipes[i][1]);
             }
         }
