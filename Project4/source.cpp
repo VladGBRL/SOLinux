@@ -33,11 +33,17 @@ void findPrimesInRange(int start, int end, int writePipe) {
     _exit(0);
 }
 
-// Proces 1: colectează rezultatele și le trimite părintelui
+// Procesul care colectează rezultatele și calculează și numere prime
 void processOne(int pipes[NUM_PROCESSES][2], int writeToParent) {
     std::ostringstream aggregatedResults;
-    std::cout << "[Process 1] Collecting results...\n";
+    std::cout << "[Process 1] Collecting results and calculating primes...\n";
 
+    // Procesul 1 va calcula și numere prime pe intervalul său
+    int start = 0;
+    int end = RANGE - 1; // Primul interval [0, 999]
+    findPrimesInRange(start, end, pipes[0][1]);
+
+    // Colectează rezultatele de la celelalte procese
     for (int i = 1; i < NUM_PROCESSES; ++i) {
         close(pipes[i][1]); // Închide capătul de scriere al pipe-ului
         char buffer[1024];
@@ -81,14 +87,13 @@ void createProcesses() {
         }
 
         if (pids[i] == 0) { // Proces copil
-            if (i == 0) { // Procesul 1
-                close(pipeToParent[0]); // Închide capătul de citire
-                processOne(pipes, pipeToParent[1]);
+            int start = i * RANGE;
+            int end = (i == NUM_PROCESSES - 1) ? 10000 : (i + 1) * RANGE - 1; // Ajustare pentru ultimul interval
+            if (i == 0) {
+                processOne(pipes, pipeToParent[1]); // Procesul 1 calculează și primele sale
             }
-            else { // Alte procese
+            else {
                 close(pipes[i][0]); // Închide capătul de citire
-                int start = (i - 1) * RANGE;
-                int end = (i == NUM_PROCESSES - 1) ? 10000 : i * RANGE - 1; // Ajustare pentru ultimul interval
                 findPrimesInRange(start, end, pipes[i][1]);
             }
         }
