@@ -1,14 +1,14 @@
 ﻿#include <iostream>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <vector>
 #include <sstream>
+#include <vector>
 #include <cstring>
 
 #define NUM_PROCESSES 10
 #define RANGE 1000
 
-// Function to check if a number is prime
+// Funcție pentru verificarea numerelor prime
 bool isPrime(int num) {
     if (num < 2) return false;
     for (int i = 2; i * i <= num; ++i) {
@@ -17,9 +17,11 @@ bool isPrime(int num) {
     return true;
 }
 
-// Child process function to find primes in a range and write them to a pipe
+// Proces copil: calculează numerele prime și le scrie într-un pipe
 void findPrimesInRange(int start, int end, int writePipe) {
     std::ostringstream resultStream;
+    std::cout << "[Process " << getpid() << "] Calculating primes in range ["
+        << start << ", " << end << "]\n";
     for (int i = start; i < end; ++i) {
         if (isPrime(i)) {
             resultStream << i << " ";
@@ -27,37 +29,39 @@ void findPrimesInRange(int start, int end, int writePipe) {
     }
     std::string result = resultStream.str();
     write(writePipe, result.c_str(), result.size());
-    close(writePipe); // Ensure the pipe is closed after writing
-    _exit(0); // Terminate the child process
+    close(writePipe); // Închide pipe-ul după scriere
+    std::cout << "[Process " << getpid() << "] Done. Sent primes: " << result << "\n";
+    _exit(0);
 }
 
-// Process 1 collects results from all other processes and sends to the parent
+// Proces 1: colectează rezultatele și le trimite părintelui
 void processOne(int pipes[NUM_PROCESSES][2], int writeToParent) {
     std::ostringstream aggregatedResults;
+    std::cout << "[Process 1] Collecting results...\n";
 
-    // Process 1 collects results from other child processes
     for (int i = 1; i < NUM_PROCESSES; ++i) {
-        close(pipes[i][1]); // Close the write end of the pipe
+        close(pipes[i][1]); // Închide capătul de scriere al pipe-ului
         char buffer[1024];
         ssize_t bytesRead;
         while ((bytesRead = read(pipes[i][0], buffer, sizeof(buffer) - 1)) > 0) {
-            buffer[bytesRead] = '\0'; // Null-terminate the string
+            buffer[bytesRead] = '\0'; // Null-terminate buffer-ul
             aggregatedResults << buffer;
+            std::cout << "[Process 1] Received from process " << i << ": " << buffer << "\n";
         }
-        close(pipes[i][0]); // Close the read end after reading
+        close(pipes[i][0]); // Închide capătul de citire după ce ai terminat
     }
 
-    // Send the aggregated results to the parent
     std::string finalOutput = aggregatedResults.str();
     write(writeToParent, finalOutput.c_str(), finalOutput.size());
-    close(writeToParent); // Close the pipe to parent
-    _exit(0); // Terminate Process 1
+    close(writeToParent); // Închide pipe-ul către părinte
+    std::cout << "[Process 1] All results sent to parent.\n";
+    _exit(0);
 }
 
-// Function to create child processes and manage pipes
+// Crează procesele și pipe-urile
 void createProcesses() {
-    int pipes[NUM_PROCESSES][2]; // Pipes for communication between parent and children
-    int pipeToParent[2];         // Pipe for Process 1 to send results to the parent
+    int pipes[NUM_PROCESSES][2]; // Pipe-uri pentru fiecare proces
+    int pipeToParent[2];         // Pipe pentru procesul 1 -> părinte
     pid_t pids[NUM_PROCESSES];
 
     if (pipe(pipeToParent) == -1) {
@@ -77,39 +81,38 @@ void createProcesses() {
             exit(1);
         }
 
-        if (pids[i] == 0) { // Child process
-            if (i == 0) { // Process 1
-                close(pipeToParent[0]); // Close read end of parent pipe
+        if (pids[i] == 0) { // Proces copil
+            if (i == 0) { // Procesul 1
+                close(pipeToParent[0]); // Închide capătul de citire
                 processOne(pipes, pipeToParent[1]);
             }
-            else { // Other processes
-                close(pipes[i][0]); // Close read end of child pipe
-                int start = i * RANGE;
-                int end = (i + 1) * RANGE;
-                if (end > 10000) end = 10000; // Ensure we don't go out of bounds
+            else { // Alte procese
+                close(pipes[i][0]); // Închide capătul de citire
+                int start = (i - 1) * RANGE;
+                int end = i * RANGE;
                 findPrimesInRange(start, end, pipes[i][1]);
             }
         }
     }
 
-    // Parent process
-    close(pipeToParent[1]); // Close write end of parent pipe
-    for (int i = 0; i < NUM_PROCESSES; ++i) {
-        if (i != 0) close(pipes[i][0]); // Close read ends for all other pipes
-        if (i != 0) close(pipes[i][1]); // Close write ends for all other pipes
+    // Procesul părinte
+    close(pipeToParent[1]); // Închide capătul de scriere
+    for (int i = 1; i < NUM_PROCESSES; ++i) {
+        close(pipes[i][0]); // Închide capetele de citire
+        close(pipes[i][1]); // Închide capetele de scriere
     }
 
-    // Read the final results from Process 1
+    // Citește rezultatele finale de la procesul 1
     char buffer[1024];
     ssize_t bytesRead;
     std::cout << "Final primes collected by Process 1:\n";
     while ((bytesRead = read(pipeToParent[0], buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[bytesRead] = '\0'; // Null-terminate the string
-        std::cout << buffer; // Print the output as it is received
+        buffer[bytesRead] = '\0';
+        std::cout << buffer; // Afișează rezultatele
     }
-    close(pipeToParent[0]); // Close the read end of the pipe
+    close(pipeToParent[0]); // Închide capătul de citire
 
-    // Wait for all child processes to finish
+    // Așteaptă procesele să termine
     for (int i = 0; i < NUM_PROCESSES; ++i) {
         waitpid(pids[i], nullptr, 0);
     }
