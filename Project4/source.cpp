@@ -20,17 +20,17 @@ bool isPrime(int num) {
 // Proces copil: calculează numerele prime și le scrie într-un pipe
 void findPrimesInRange(int start, int end, int writePipe) {
     std::ostringstream resultStream;
-    std::cout << "[Process " << getpid() << "] Calculating primes in range ["
-        << start << ", " << end << "]\n";
+    resultStream << "[Process " << getpid() << "] Primes in range ["
+        << start << ", " << end << "]: ";
     for (int i = start; i < end; ++i) {
         if (isPrime(i)) {
             resultStream << i << " ";
         }
     }
     std::string result = resultStream.str();
+    std::cout << result << "\n"; // Afișează ce a calculat procesul
     write(writePipe, result.c_str(), result.size());
     close(writePipe); // Închide pipe-ul după scriere
-    std::cout << "[Process " << getpid() << "] Done. Sent primes: " << result << "\n";
     _exit(0);
 }
 
@@ -46,15 +46,15 @@ void processOne(int pipes[NUM_PROCESSES][2], int writeToParent) {
         while ((bytesRead = read(pipes[i][0], buffer, sizeof(buffer) - 1)) > 0) {
             buffer[bytesRead] = '\0'; // Null-terminate buffer-ul
             aggregatedResults << buffer;
-            std::cout << "[Process 1] Received from process " << i << ": " << buffer << "\n";
         }
         close(pipes[i][0]); // Închide capătul de citire după ce ai terminat
     }
 
     std::string finalOutput = aggregatedResults.str();
+    std::cout << "[Process 1] Final primes collected:\n" << finalOutput << "\n";
+
     write(writeToParent, finalOutput.c_str(), finalOutput.size());
     close(writeToParent); // Închide pipe-ul către părinte
-    std::cout << "[Process 1] All results sent to parent.\n";
     _exit(0);
 }
 
